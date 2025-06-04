@@ -1,3 +1,5 @@
+"""Данные для теста ручек. Имитация БД."""
+
 import pytz
 
 from datetime import datetime, timedelta
