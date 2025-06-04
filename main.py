@@ -20,7 +20,7 @@ class SuipDataResponse(BaseModel):
 
 
 async def parse_suip_data():
-    """Парсер данных файлов."""
+    """Имитация парсера данных файлов."""
     return {
         "filename": f"parsed_file_{random.randint(1, 15)}.txt",
         "filetype": ".txt"
@@ -78,7 +78,7 @@ async def get_suip_data(filetype: Optional[str] = None) -> List[Dict]:
     """
     try:
         data = TestDataManager.get_all()
-        return filter_by_filetype(data, filetype) if filetype else data
+        return filter_by_filetype(data=data, filetype=filetype) if filetype else data
 
     except HTTPException as he:
         raise he
@@ -98,7 +98,7 @@ async def parse_and_save() -> Dict[str, str]:
     try:
         new_file = await parse_suip_data()
         existing_data = TestDataManager.get_all()
-        file = check_file(existing_data, new_file)
+        file = check_file(data=existing_data, new_file=new_file)
 
         if file:
             raise HTTPException(
