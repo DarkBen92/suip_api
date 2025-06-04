@@ -77,8 +77,8 @@ async def get_suip_data(filetype: Optional[str] = None) -> List[Dict]:
     :return: Список данных о файлах
     """
     try:
-        data = TestDataManager.get_all()
-        return filter_by_filetype(data=data, filetype=filetype) if filetype else data
+        existing_data = TestDataManager.get_all()
+        return filter_by_filetype(data=existing_data, filetype=filetype) if filetype else existing_data
 
     except HTTPException as he:
         raise he
