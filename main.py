@@ -3,7 +3,7 @@ from fastapi.exceptions import RequestValidationError
 from typing import Optional, List, Dict
 from pydantic import BaseModel
 
-from database_psycopg2 import save_metadata, get_all_metadata
+from database_pg import save_metadata, get_all_metadata
 from helper import filter_by_filetype, check_file, save_to_json
 from parse_data import parse_suip_data
 
@@ -79,10 +79,7 @@ async def parse_and_save(uploaded_file: UploadFile = File(...)) -> Dict[str, str
                 detail={"message": f"Обнаружен схожий файл {conflict_file['filename']}"}
             )
         
-        save_metadata(result_parsing)
-    
-        existing_data = get_all_metadata()
-        new_id = max([item.get('id', 0) for item in existing_data], default=0) + 1
+        new_id = save_metadata(result_parsing)
         result_parsing['id'] = new_id
         
         saved_file_path = save_to_json(result_parsing)
