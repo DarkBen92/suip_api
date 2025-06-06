@@ -1,13 +1,13 @@
-from fastapi import FastAPI, HTTPException, status, UploadFile, File
+from fastapi import FastAPI, HTTPException, status, UploadFile, File, Request
+from fastapi.exceptions import RequestValidationError
 from typing import Optional, List, Dict
 from pydantic import BaseModel
+
+from database_psycopg2 import save_metadata, get_all_metadata
 from helper import filter_by_filetype, check_file, save_to_json
 from parse_data import parse_suip_data
-from test_data import TestDataManager
 
 app = FastAPI(title="SUIP API")
-
-TestDataManager.initialize()
 
 
 class SuipDataResponse(BaseModel):
@@ -33,17 +33,17 @@ class SuipDataResponse(BaseModel):
 async def get_suip_data(filetype: Optional[str] = None) -> List[Dict]:
     """Ручка GET для получения данных о файлах.
 
-    :param filetype: Необязательный фильтр по типу файла
+    :param filetype: Необязательный фильтр, поиск по типу файла
 
     :return: Список данных о файлах
     """
     try:
-        existing_data = TestDataManager.get_all()
-
+        data = get_all_metadata()
+        
         if not filetype:
-            return existing_data
+            return data
             
-        filtered_data = filter_by_filetype(data=existing_data, filetype=filetype)
+        filtered_data = filter_by_filetype(data=data, filetype=filetype)
         if not filtered_data:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -61,17 +61,17 @@ async def get_suip_data(filetype: Optional[str] = None) -> List[Dict]:
 
 
 @app.post("/suip-data/parse", response_model=SuipDataResponse)
-async def parse_and_save(file_path: UploadFile = File(...)) -> Dict[str, str]:
+async def parse_and_save(uploaded_file: UploadFile = File(...)) -> Dict[str, str]:
     """Ручка POST для парсинга и сохранения данных о файлах.
     
-    :param file_path: ID файла
+    :param uploaded_file: Файл, который загружен для парсинга
 
     :return: Сохраненные данные о файле и путь к файлу с метаданными
     """
     try:
-        result_parsing = await parse_suip_data(file_path)
-        existing_data = TestDataManager.get_all()
-        conflict_file = check_file(data=existing_data, new_file=result_parsing)
+        result_parsing = await parse_suip_data(uploaded_file)
+        data = get_all_metadata()
+        conflict_file = check_file(data=data, new_file=result_parsing)
 
         if conflict_file:
             raise HTTPException(
@@ -79,12 +79,17 @@ async def parse_and_save(file_path: UploadFile = File(...)) -> Dict[str, str]:
                 detail={"message": f"Обнаружен схожий файл {conflict_file['filename']}"}
             )
         
+        save_metadata(result_parsing)
+    
+        existing_data = get_all_metadata()
+        new_id = max([item.get('id', 0) for item in existing_data], default=0) + 1
+        result_parsing['id'] = new_id
+        
         saved_file_path = save_to_json(result_parsing)
         response_data = result_parsing.copy()
         response_data["saved_file_path"] = saved_file_path
-        
-        TestDataManager.add(result_parsing)
-        return response_data and result_parsing
+
+        return response_data
         
     except HTTPException as he:
         raise he
@@ -93,6 +98,17 @@ async def parse_and_save(file_path: UploadFile = File(...)) -> Dict[str, str]:
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Ошибка при сохранении данных: {str(e)}"
         )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """Обработчик ошибок валидации запроса."""
+    if any(error["loc"][-1] == "uploaded_file" and error["type"] == "missing" for error in exc.errors()):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Отсутствует передача файла для парсинга. Обязательный параметр uploaded_file"
+        )
+    raise exc
 
 if __name__ == '__main__':
     import uvicorn

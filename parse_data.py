@@ -67,7 +67,6 @@ async def parse_suip_data(file_input: Union[str, UploadFile]) -> Dict:
     :return: Словарь с метаданными файла
     """
     temp_file_path = None
-    original_filename = None
     try:
         if isinstance(file_input, str):
             file_path = file_input
